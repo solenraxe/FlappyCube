@@ -31,6 +31,10 @@ pygame.joystick.init()
 #init
 joysticks = []
 joysticks_nb = pygame.joystick.get_count()
+for _i in range(joysticks_nb):
+    _js = pygame.joystick.Joystick(_i)
+    joysticks.append(_js)
+    print(f"Joystick détecté au démarrage : {_js.get_name()}")
 
 comicSans = pygame.font.SysFont('Comic Sans MS', 30)
 
@@ -322,7 +326,7 @@ def player_effect(player, effect, on=True, duration=180):
         else:
             player.effects.remove({"Name": "Shrinked", "Duration": 0})
             player.rect.height, player.rect.width = 50, 50
-            player.sprite = assets[f"{skinList[player.skin]}{colorList[player.color]}"]
+            player.sprite = pygame.transform.scale(player.sprite, (50, 50))
             player.rect.y -= 12
             player.rect.x -= 12
 
@@ -472,10 +476,13 @@ def keyChangeLetter(direction):
     nameChoice["currentLetterIndex"] = (nameChoice["currentLetterIndex"] + direction) % len(letterList)
     nameChoice["chosenLetters"][nameChoice["currentLetter"]] = letterList[nameChoice["currentLetterIndex"]]
 
+
+joyCooldownV = 10
 def handleEvents():
     global running, gameStates, currentSelection, pSelectText, menusTexts
 
     for event in pygame.event.get():
+
         if event.type == pygame.QUIT:
             save_data()
             return False
@@ -487,6 +494,7 @@ def handleEvents():
             joysticks_nb = pygame.joystick.get_count()
 
         elif event.type == pygame.KEYDOWN:
+
             if gameStates["gameStarted"]:
                 playerKeys = {pygame.K_UP: 0, pygame.K_DOWN: 1,
                               pygame.K_RIGHT: 2, pygame.K_LEFT: 3}
@@ -537,17 +545,18 @@ def handleEvents():
                 elif event.key == pygame.K_q:
                     return False
 
-    for i in range(len(playerList)):
-        if i >= len(joysticks):
-            continue
+    nb_joy = len(joysticks)
 
-        horiz = joysticks[i].get_axis(0)
-        vert  = joysticks[i].get_axis(1)
-
-        if gameStates["gameStarted"]:
+    if nb_joy > 0 and gameStates["gameStarted"]:
+        for i in range(nb_joy):
+            if i >= len(playerList):
+                continue
+            horiz = joysticks[i].get_axis(0)
+            vert  = joysticks[i].get_axis(1)
+            hat   = joysticks[i].get_hat(0)
             for j in range(6):
                 if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
-                    joyCooldowns[(i, j)] = 30
+                    joyCooldowns[(i, j)] = joyCooldownV
                     if j < 4:
                         playerList[i].vy -= playerList[i].jumpPower
                     elif j == 4:
@@ -555,96 +564,99 @@ def handleEvents():
                     else:
                         gameStates["gameStarted"] = not gameStates["gameStarted"]
             if abs(vert) > 0.2 or abs(horiz) > 0.2:
-                if joyCooldowns.get("VertUp", 0) <= 0:
-                    joyCooldowns["VertUp"] = 30
+                if joyCooldowns.get(f"Joy{i}Up", 0) <= 0:
+                    joyCooldowns[f"Joy{i}Up"] = joyCooldownV
                     use_ability(playerList[i], playerList[i].ability)
-            hat = joysticks[i].get_hat(0)
             if hat[1] != 0 or hat[0] != 0:
-                if joyCooldowns.get("VertUp", 0) <= 0:
-                    joyCooldowns["VertUp"] = 30
+                if joyCooldowns.get(f"Joy{i}Hat", 0) <= 0:
+                    joyCooldowns[f"Joy{i}Hat"] = joyCooldownV
                     use_ability(playerList[i], playerList[i].ability)
 
-        elif nameChoice["choosingName"]:
-            if vert > 0.2 and joyCooldowns.get("VertUp", 0) <= 0:
-                joyCooldowns["VertUp"] = 30
-                keyChangeLetter(1)
-            elif vert < -0.2 and joyCooldowns.get("VertDown", 0) <= 0:
-                joyCooldowns["VertDown"] = 30
-                keyChangeLetter(-1)
-            if horiz > 0.2 and joyCooldowns.get("HorRight", 0) <= 0:
-                joyCooldowns["HorRight"] = 30
-                keyTabName(1)
-            elif horiz < -0.2 and joyCooldowns.get("HorLeft", 0) <= 0:
-                joyCooldowns["HorLeft"] = 30
-                keyTabName(-1)
-            for j in range(5):
-                if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
-                    joyCooldowns[(i, j)] = 30
-                    if j == 0:   keyChangeLetter(1)
-                    elif j == 1: keyChangeLetter(-1)
-                    elif j == 2: keyTabName(1)
-                    elif j == 3: keyTabName(-1)
-                    elif j == 4: keyEnterName()
-            hat = joysticks[i].get_hat(0)
-            if hat[1] == 1 and joyCooldowns.get("VertUp", 0) <= 0:
-                joyCooldowns["VertUp"] = 30;  keyChangeLetter(1)
-            if hat[1] == -1 and joyCooldowns.get("VertDown", 0) <= 0:
-                joyCooldowns["VertDown"] = 30; keyChangeLetter(-1)
-            if hat[0] == 1 and joyCooldowns.get("HorRight", 0) <= 0:
-                joyCooldowns["HorRight"] = 30; keyTabName(1)
-            if hat[0] == -1 and joyCooldowns.get("HorLeft", 0) <= 0:
-                joyCooldowns["HorLeft"] = 30;  keyTabName(-1)
+    elif nb_joy > 0:
+        for i in range(nb_joy):
+            horiz = joysticks[i].get_axis(0)
+            vert  = joysticks[i].get_axis(1)
+            hat   = joysticks[i].get_hat(0)
+            vu  = f"Joy{i}VU";  vd  = f"Joy{i}VD"
+            hr  = f"Joy{i}HR";  hl  = f"Joy{i}HL"
 
-        elif gameStates["gameInit"]:
-            for j in range(8):
-                if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
-                    joyCooldowns[(i, j)] = 30
-                    gameStates["gameStarted"] = not gameStates["gameStarted"]
-            hat = joysticks[i].get_hat(0)
-            for axis_key, cooldown_key in [
-                (hat[1] == 1,  "VertUp"),  (hat[1] == -1, "VertDown"),
-                (hat[0] == 1,  "HorRight"), (hat[0] == -1, "HorLeft")
-            ]:
-                if axis_key and joyCooldowns.get(cooldown_key, 0) <= 0:
-                    joyCooldowns[cooldown_key] = 30
-                    gameStates["gameStarted"] = not gameStates["gameStarted"]
+            if nameChoice["choosingName"]:
+                if vert > 0.2 and joyCooldowns.get(vu, 0) <= 0:
+                    joyCooldowns[vu] = joyCooldownV; keyChangeLetter(1)
+                elif vert < -0.2 and joyCooldowns.get(vd, 0) <= 0:
+                    joyCooldowns[vd] = joyCooldownV; keyChangeLetter(-1)
+                if horiz > 0.2 and joyCooldowns.get(hr, 0) <= 0:
+                    joyCooldowns[hr] = joyCooldownV; keyTabName(1)
+                elif horiz < -0.2 and joyCooldowns.get(hl, 0) <= 0:
+                    joyCooldowns[hl] = joyCooldownV; keyTabName(-1)
+                for j in range(5):
+                    if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
+                        joyCooldowns[(i, j)] = joyCooldownV
+                        if j == 0:   keyChangeLetter(1)
+                        elif j == 1: keyChangeLetter(-1)
+                        elif j == 2: keyTabName(1)
+                        elif j == 3: keyTabName(-1)
+                        elif j == 4: keyEnterName()
+                if hat[1] == 1 and joyCooldowns.get(vu, 0) <= 0:
+                    joyCooldowns[vu] = joyCooldownV; keyChangeLetter(1)
+                if hat[1] == -1 and joyCooldowns.get(vd, 0) <= 0:
+                    joyCooldowns[vd] = joyCooldownV; keyChangeLetter(-1)
+                if hat[0] == 1 and joyCooldowns.get(hr, 0) <= 0:
+                    joyCooldowns[hr] = joyCooldownV; keyTabName(1)
+                if hat[0] == -1 and joyCooldowns.get(hl, 0) <= 0:
+                    joyCooldowns[hl] = joyCooldownV; keyTabName(-1)
 
-        else:
-            if vert > 0.2 and joyCooldowns.get("VertUp", 0) <= 0:
-                joyCooldowns["VertUp"] = 30;   keyVertMenu(1)
-            elif vert < -0.2 and joyCooldowns.get("VertDown", 0) <= 0:
-                joyCooldowns["VertDown"] = 30; keyVertMenu(-1)
-            if horiz > 0.2 and joyCooldowns.get("HorRight", 0) <= 0:
-                joyCooldowns["HorRight"] = 30; keyHorMenu(1)
-            elif horiz < -0.2 and joyCooldowns.get("HorLeft", 0) <= 0:
-                joyCooldowns["HorLeft"] = 30;  keyHorMenu(-1)
-            for j in range(6):
-                if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
-                    joyCooldowns[(i, j)] = 30
-                    if j == 0:   keyVertMenu(1)
-                    elif j == 1: keyVertMenu(-1)
-                    elif j == 2: keyHorMenu(1)
-                    elif j == 3: keyHorMenu(-1)
-                    elif j == 4: keyTabMenu()
-                    elif j == 5:
-                        if menuList[menuSwitch["currentMenu"]] in ("Colors", "Skins", "Abilities", "Stats"):
-                            currentSelection = (currentSelection + 1) % settingsMenu["settings"]["Player Count"][2]
-                            pSelectText = comicSans.render(f"Current player selection : P{currentSelection + 1}", False, colors["White"])
-                            menusTexts["ColorsTexts"][2] = comicSans.render(f"Current color : {colorList[playerList[currentSelection].color]}", False, colors["White"])
-                            menusTexts["SkinsTexts"][2] = comicSans.render(f"Current skin : {skinList[playerList[currentSelection].skin]}", False, colors["White"])
-            hat = joysticks[i].get_hat(0)
-            if hat[1] == 1 and joyCooldowns.get("VertUp", 0) <= 0:
-                joyCooldowns["VertUp"] = 30;   keyVertMenu(1)
-            if hat[1] == -1 and joyCooldowns.get("VertDown", 0) <= 0:
-                joyCooldowns["VertDown"] = 30; keyVertMenu(-1)
-            if hat[0] == 1 and joyCooldowns.get("HorRight", 0) <= 0:
-                joyCooldowns["HorRight"] = 30; keyHorMenu(1)
-            if hat[0] == -1 and joyCooldowns.get("HorLeft", 0) <= 0:
-                joyCooldowns["HorLeft"] = 30;  keyHorMenu(-1)
+            elif gameStates["gameInit"]:
+                for j in range(8):
+                    if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
+                        joyCooldowns[(i, j)] = joyCooldownV
+                        gameStates["gameStarted"] = not gameStates["gameStarted"]
+                for axis_val, ck_name in [
+                    (hat[1] == 1, vu), (hat[1] == -1, vd),
+                    (hat[0] == 1, hr), (hat[0] == -1, hl)
+                ]:
+                    if axis_val and joyCooldowns.get(ck_name, 0) <= 0:
+                        joyCooldowns[ck_name] = joyCooldownV
+                        gameStates["gameStarted"] = not gameStates["gameStarted"]
+
+            else:
+                if vert > 0.2 and joyCooldowns.get(vu, 0) <= 0:
+                    joyCooldowns[vu] = joyCooldownV; keyVertMenu(1)
+                elif vert < -0.2 and joyCooldowns.get(vd, 0) <= 0:
+                    joyCooldowns[vd] = joyCooldownV; keyVertMenu(-1)
+                if horiz > 0.2 and joyCooldowns.get(hr, 0) <= 0:
+                    joyCooldowns[hr] = joyCooldownV; keyHorMenu(1)
+                elif horiz < -0.2 and joyCooldowns.get(hl, 0) <= 0:
+                    joyCooldowns[hl] = joyCooldownV; keyHorMenu(-1)
+                for j in range(6):
+                    if joysticks[i].get_button(j) and (i, j) not in joyCooldowns:
+                        joyCooldowns[(i, j)] = joyCooldownV
+                        if j == 0:   keyVertMenu(1)
+                        elif j == 1: keyVertMenu(-1)
+                        elif j == 2: keyHorMenu(1)
+                        elif j == 3: keyHorMenu(-1)
+                        elif j == 4: keyTabMenu()
+                        elif j == 5:
+                            if menuList[menuSwitch["currentMenu"]] in ("Colors", "Skins", "Abilities", "Stats"):
+                                currentSelection = (currentSelection + 1) % settingsMenu["settings"]["Player Count"][2]
+                                pSelectText = comicSans.render(f"Current player selection : P{currentSelection + 1}", False, colors["White"])
+                                menusTexts["ColorsTexts"][2] = comicSans.render(f"Current color : {colorList[playerList[currentSelection].color]}", False, colors["White"])
+                                menusTexts["SkinsTexts"][2] = comicSans.render(f"Current skin : {skinList[playerList[currentSelection].skin]}", False, colors["White"])
+                if hat[1] == 1 and joyCooldowns.get(vu, 0) <= 0:
+                    joyCooldowns[vu] = joyCooldownV; keyVertMenu(1)
+                if hat[1] == -1 and joyCooldowns.get(vd, 0) <= 0:
+                    joyCooldowns[vd] = joyCooldownV; keyVertMenu(-1)
+                if hat[0] == 1 and joyCooldowns.get(hr, 0) <= 0:
+                    joyCooldowns[hr] = joyCooldownV; keyHorMenu(1)
+                if hat[0] == -1 and joyCooldowns.get(hl, 0) <= 0:
+                    joyCooldowns[hl] = joyCooldownV; keyHorMenu(-1)
 
     return True
 
+
+running = True
 def tick_joyCooldowns():
+    """Decrement all joystick cooldown timers each frame."""
     for key in list(joyCooldowns.keys()):
         joyCooldowns[key] -= 1
         if joyCooldowns[key] <= 0:
@@ -652,7 +664,6 @@ def tick_joyCooldowns():
 
 
 #main loop
-running = True
 while running:
     tick_joyCooldowns()
 
